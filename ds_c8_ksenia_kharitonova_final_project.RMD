@@ -1,0 +1,123 @@
+---
+title: 'DS C8 Final Project: Prediction of the Exercise Manner'
+author: "Ksenia Kharitonova"
+date: "September 16, 2017"
+output: html_document
+---
+
+Human Activity Recognition - HAR - has emerged as a key research area in the last years and is gaining increasing attention by the pervasive computing research community, especially for the development of context-aware systems.
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+In this project, the goal is to predict the manner in which the participants did the exercise (the `classe` variable) using data from accelerometers. 
+
+**The source of the dataset**:
+
+_Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013._ 
+
+## Importing Libraries and Getting Data
+
+In this project we will work with the `caret` package for fitting machine learning models and `dtplyr` for getting and manipulating data.
+
+```{r warning=FALSE, message=FALSE}
+library(dtplyr)
+library(caret)
+```
+
+The data can be found here: [training data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) and [test data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv).
+
+```{r cache = TRUE}
+training <- read.csv('pml-training.csv', na.strings = c("NA", ""))
+testing <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+```
+
+## Cleaning Data
+
+We remove the columns with the `NA` values...
+
+```{r cache = TRUE}
+training <- training[,colSums(is.na(training))==0]
+testing <- testing[,colSums(is.na(testing))==0]
+```
+
+...as well as the first 7 columns containing irrelevant information about participants and the date and time of the experiment. 
+
+```{r cache = TRUE}
+training<- training[,-(1:7)]
+testing<- testing[,-(1:7)]
+```
+
+## Cross Validation
+
+The training data set is used to train the model. We will further divide it in the training and validation datasets. The final prediction is done on the testing set.
+
+```{r cache = TRUE}
+set.seed(205) 
+inTrain <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+train <- training[inTrain, ]
+valid <- training[-inTrain, ]
+```
+
+## Fitting Random Forest
+
+A random forest is an ensemble learning approach to supervised learning. The algorithm for a random forest loosely can be decribed as sampling cases and variables to create a large number of decision trees. Each case is classified by each decision tree. The most common classification for that case is then used as the outcome.
+
+We will use `randomForest` package with `caret` wrapping for fitting the model using 3-fold stratified cross validation on the training dataset.
+
+```{r cache = TRUE, warning=FALSE, message=FALSE}
+control <- trainControl(method = "cv", number = 3)
+model_rf <- train(classe ~ ., data = train, method = "rf", trControl = control)
+```
+
+Predicting the `classe` variable on the `valid` dataset. The final accuracy of the model is quite high.
+
+```{r cache = TRUE}
+pred_rf <- predict(model_rf, valid)
+conf_rf <- confusionMatrix(valid$classe, pred_rf)
+conf_rf$overall[1]
+```
+
+## Fitting Linear SVM
+
+Support Vector Machines try to fit an optimal hyperplane for separating classes in multidimensional space. The hyperplane is chosen to maximize the margin between the classes' closest points (support vectors).
+
+We use the `svmLinear` method in the `caret` package.
+
+```{r cache = TRUE, warning=FALSE, message=FALSE}
+model_svm <- train(classe ~ ., data = train, method ='svmLinear', trControl = control, verbose = FALSE)
+```
+
+The accuracy of the model is much lower than random forest.
+
+```{r cache = TRUE}
+pred_svm <- predict(model_svm, valid)
+conf_svm <- confusionMatrix(valid$classe, pred_svm)
+conf_svm$overall[1]
+```
+
+## Fitting Gradient Boosting
+
+The last model we will try to fit is the gradient boosting model which belong to the class of ensemble models (like the random forest algorithm). Boosting is the process of iteratively adding basis functions in a greedy fashion so that each additional basis function further reduces the selected loss function.
+
+```{r cache = TRUE, warning=FALSE, message=FALSE}
+model_gbm <- train(classe ~ ., data = train, method ='gbm', trControl = control, verbose = FALSE)
+```
+
+The accuracy of the predicted results is higher than that of the SVM predictor but is still lower than the random forest metric. 
+
+```{r cache = TRUE}
+pred_gbm <- predict(model_gbm, valid)
+conf_gbm <- confusionMatrix(valid$classe, pred_gbm)
+conf_gbm$overall[1]
+```
+
+
+## Predicting Test Results
+
+The random forests gave the highest accuracy on the validation set, therefore we will use it to make a prediction on the test data.
+
+```{r cache = TRUE}
+predict(model_rf, testing)
+```
+
+## Thank you!
